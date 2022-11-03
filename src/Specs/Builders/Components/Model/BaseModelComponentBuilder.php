@@ -88,7 +88,10 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
      */
     protected function resolveIncludedColumns(Model $resourceModel, Request $resourceRequest): array
     {
-        return collect($resourceRequest->rules())
+        return collect([
+            ...$resourceRequest->commonRules(),
+            ...$resourceRequest->storeRules(),
+        ])
             ->keys()
             ->map(fn ($i) => explode('.', $i)[0])
             ->unique()

@@ -7,7 +7,7 @@ use Orion\Http\Resources\Resource;
 
 class ProductRequest extends Request
 {
-    public function rules()
+    public function commonRules(): array
     {
         return [
             'title' => ['nullable', 'string'],
