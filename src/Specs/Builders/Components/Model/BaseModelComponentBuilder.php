@@ -8,6 +8,7 @@ use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\Schema\Column;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Orion\Http\Requests\Request;
 use Orion\Http\Resources\Resource;
 use Orion\Specs\Builders\Components\ModelComponentBuilder;
 use Orion\ValueObjects\Specs\Component;
@@ -21,17 +22,17 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
      * @return Component
      * @throws Exception
      */
-    public function build(Model $resourceModel, Resource $resourceResource): Component
+    public function build(Model $resourceModel, Resource $resourceResource, Request $resourceRequest): Component
     {
         $component = new Component();
         $component->title = class_basename($resourceModel);
         $component->type = 'object';
 
-        $excludedColumns = $this->resolveExcludedColumns($resourceModel);
+        $includedColumns = $this->resolveIncludedColumns($resourceModel, $resourceRequest);
 
         $component->properties = $this->getPropertiesFromSchema(
             $resourceModel,
-            $excludedColumns,
+            $includedColumns,
         );
 
         return $component;
@@ -39,20 +40,17 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
 
     /**
      * @param Model $resourceModel
-     * @param array $excludedColumns
+     * @param array $includedColumns
      * @return array
      * @throws Exception
      */
-    protected function getPropertiesFromSchema(Model $resourceModel, array $excludedColumns = []): array
+    protected function getPropertiesFromSchema(Model $resourceModel, array $includedColumns = []): array
     {
         $columns = $this->schemaManager->getSchemaColumns($resourceModel);
 
         return collect($columns)
-            ->filter(function (Column $column) use ($excludedColumns) {
-                return !in_array($column->getName(), $excludedColumns, true);
-            })
-            ->filter(function (Column $column) use ($resourceModel) {
-                return $resourceModel->isFillable($column->getName());
+            ->filter(function (Column $column) use ($includedColumns) {
+                return in_array($column->getName(), $includedColumns, true);
             })
             ->map(function (Column $column) use ($resourceModel) {
                 $propertyClass = $this->schemaManager->resolveSchemaPropertyClass($column, $resourceModel);
@@ -68,7 +66,7 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
      * @param Model $resourceModel
      * @return array
      */
-    protected function resolveExcludedColumns(Model $resourceModel): array
+    protected function resolveExcludedColumns(Model $resourceModel, Request $resourceRequest): array
     {
         $excludedColumns = [
             $resourceModel->getKeyName(),
@@ -82,5 +80,18 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
         }
 
         return $excludedColumns;
+    }
+
+    /**
+     * @param Model $resourceModel
+     * @return array
+     */
+    protected function resolveIncludedColumns(Model $resourceModel, Request $resourceRequest): array
+    {
+        return collect($resourceRequest->rules())
+            ->keys()
+            ->map(fn ($i) => explode('.', $i)[0])
+            ->unique()
+            ->all();
     }
 }

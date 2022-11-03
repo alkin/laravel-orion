@@ -3,6 +3,7 @@
 namespace Orion\Tests\Fixtures\App\Http\Controllers;
 
 use Orion\Http\Controllers\Controller;
+use Orion\Tests\Fixtures\App\Http\Requests\ProductRequest;
 use Orion\Tests\Fixtures\App\Http\Resources\ProductResource;
 use Orion\Tests\Fixtures\App\Models\Product;
 
@@ -14,7 +15,9 @@ class ProductsController extends Controller
     protected $model = Product::class;
 
     /**
-    * @var string|null $resource
-    */
+     * @var string|null $resource
+     */
     protected $resource = ProductResource::class;
+
+    protected $request = ProductRequest::class;
 }

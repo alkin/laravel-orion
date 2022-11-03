@@ -56,5 +56,15 @@ class ComponentsBuilderTest extends TestCase
 
         // Removed properties
         $this->assertArrayNotHasKey('total_revenue', $resource);
+
+        // Request
+        $schemas = $components['schemas'];
+        $this->assertArrayHasKey('Product', $schemas);
+
+        $resource = $schemas['Product']['properties'];
+
+        $this->assertArrayHasKey('title', $resource);
+        $this->assertArrayHasKey('description', $resource);
+        $this->assertArrayNotHasKey('company', $resource);
     }
 }
