@@ -13,6 +13,10 @@ interface RelationsResolver
 
     public function requestedRelations(Request $request): array;
 
+    public function relationInstanceFromParamConstraint(string $resourceModelClass, string $paramConstraint): Relation;
+
+    public function rootRelationFromParamConstraint(string $paramConstraint): string;
+
     public function relationFromParamConstraint(string $paramConstraint): string;
 
     public function relationFieldFromParamConstraint(string $paramConstraint): string;
@@ -22,6 +26,8 @@ interface RelationsResolver
     public function relationForeignKeyFromRelationInstance(Relation $relationInstance): string;
 
     public function relationLocalKeyFromRelationInstance(Relation $relationInstance): string;
+
+    public function getQualifiedRelationFieldName(Relation $relation, string $field): string;
 
     public function guardRelationsForCollection(Collection $entities, array $requestedRelations, ?string $parentRelation = null, bool $normalized = false): Collection;
 

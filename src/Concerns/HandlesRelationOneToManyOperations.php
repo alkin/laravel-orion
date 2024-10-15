@@ -51,8 +51,8 @@ trait HandlesRelationOneToManyOperations
             return $beforeHookResult;
         }
 
-        $this->authorize('view', $parentEntity);
-        $this->authorize('update', [$entity, $parentEntity]);
+        $this->authorize($this->resolveAbility('show'), $parentEntity);
+        $this->authorize($this->resolveAbility('update'), [$entity, $parentEntity]);
 
         $this->performAssociate($request, $parentEntity, $entity);
 
@@ -105,8 +105,7 @@ trait HandlesRelationOneToManyOperations
     {
         $relatedModel = $parentEntity->{$this->getRelation()}()->getModel();
 
-        return $this->relationQueryBuilder->buildQuery($relatedModel->query(), $request)
-            ->with($this->relationsResolver->requestedRelations($request));
+        return $this->relationQueryBuilder->buildQuery($relatedModel->query(), $request);
     }
 
     /**
@@ -204,17 +203,17 @@ trait HandlesRelationOneToManyOperations
             return $beforeHookResult;
         }
 
-        $this->authorize('update', [$entity, $parentEntity]);
+        $this->authorize($this->resolveAbility('update'), [$entity, $parentEntity]);
 
         $this->performDissociate($request, $parentEntity, $entity);
 
         $entity = $this->relationQueryBuilder->buildQuery($entity::query(), $request)
-            ->with($this->relationsResolver->requestedRelations($request))->where(
+            ->where(
                 $this->resolveQualifiedKeyName(),
                 $entity->{$this->keyName()}
             )->firstOrFail();
 
-        $afterHookResult = $this->afterDissociate($request, $parentEntity,$entity);
+        $afterHookResult = $this->afterDissociate($request, $parentEntity, $entity);
         if ($this->hookResponds($afterHookResult)) {
             return $afterHookResult;
         }

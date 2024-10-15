@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Orion\Tests\Fixtures\App\Models\Company;
 use Orion\Tests\Fixtures\App\Models\Post;
+use Orion\Tests\Fixtures\App\Models\PostMeta;
 use Orion\Tests\Fixtures\App\Models\Team;
 use Orion\Tests\Fixtures\App\Models\User;
 use Orion\Tests\Fixtures\App\Policies\GreenPolicy;
@@ -351,6 +352,35 @@ class StandardIndexFilteringOperationsTest extends TestCase
     }
 
     /** @test */
+    public function getting_a_list_of_resources_filtered_by_deep_relation_field_resources(): void
+    {
+        $matchingPostUser = factory(User::class)->create(['name' => 'match']);
+        $matchingPostUser->roles()->create(['name' => 'matching-role-name']);
+        $matchingPost = factory(Post::class)->create(['user_id' => $matchingPostUser->id])->fresh();
+
+        $nonMatchingPostUser = factory(User::class)->create(['name' => 'not match']);
+        $nonMatchingPostUser->roles()->create(['name' => 'non-matching-role-name']);
+        factory(Post::class)->create(['user_id' => $nonMatchingPostUser->id])->fresh();
+
+        Gate::policy(Post::class, GreenPolicy::class);
+
+        $response = $this->post(
+            '/api/posts/search',
+            [
+                'filters' => [
+                    ['field' => 'user.name', 'operator' => '=', 'value' => 'match'],
+                    ['field' => 'user.roles.name', 'operator' => '=', 'value' => 'matching-role-name'],
+                ],
+            ]
+        );
+
+        $this->assertResourcesPaginated(
+            $response,
+            $this->makePaginator([$matchingPost], 'posts/search')
+        );
+    }
+
+    /** @test */
     public function getting_a_list_of_resources_filtered_by_not_whitelisted_field(): void
     {
         factory(Post::class)->create(['body' => 'match'])->fresh();
@@ -537,12 +567,12 @@ class StandardIndexFilteringOperationsTest extends TestCase
     /** @test */
     public function getting_a_list_of_resources_filtered_by_jsonb_array_field_inclusive(): void
     {
-        if (config('database.default') === 'sqlite'){
+        if ($this->noSupportForJsonDbOperations()) {
             $this->markTestSkipped('Not supported with SQLite');
         }
 
         $matchingPost = factory(Post::class)
-            ->create(['options' =>  ['a', 'b', 'c']])->fresh();
+            ->create(['options' => ['a', 'b', 'c']])->fresh();
         factory(Post::class)->create(['publish_at' => Carbon::now()])->fresh();
 
         Gate::policy(Post::class, GreenPolicy::class);
@@ -565,7 +595,7 @@ class StandardIndexFilteringOperationsTest extends TestCase
     /** @test */
     public function getting_a_list_of_resources_filtered_by_nested_jsonb_array_field_inclusive(): void
     {
-        if (config('database.default') === 'sqlite'){
+        if ($this->noSupportForJsonDbOperations()) {
             $this->markTestSkipped('Not supported with SQLite');
         }
 
@@ -593,12 +623,12 @@ class StandardIndexFilteringOperationsTest extends TestCase
     /** @test */
     public function getting_a_list_of_resources_filtered_by_jsonb_array_field_exclusive(): void
     {
-        if (config('database.default') === 'sqlite'){
+        if ($this->noSupportForJsonDbOperations()) {
             $this->markTestSkipped('Not supported with SQLite');
         }
 
         $matchingPost = factory(Post::class)
-            ->create(['options' =>  ['a', 'd']])->fresh();
+            ->create(['options' => ['a', 'd']])->fresh();
         factory(Post::class)->create(['publish_at' => Carbon::now()])->fresh();
 
         Gate::policy(Post::class, GreenPolicy::class);
@@ -621,7 +651,7 @@ class StandardIndexFilteringOperationsTest extends TestCase
     /** @test */
     public function getting_a_list_of_resources_filtered_by_nested_jsonb_array_field_exclusive(): void
     {
-        if (config('database.default') === 'sqlite'){
+        if ($this->noSupportForJsonDbOperations()) {
             $this->markTestSkipped('Not supported with SQLite');
         }
 
@@ -636,6 +666,62 @@ class StandardIndexFilteringOperationsTest extends TestCase
             [
                 'filters' => [
                     ['field' => 'options->nested_field', 'operator' => 'any in', 'value' => ['a', 'b']],
+                ],
+            ]
+        );
+
+        $this->assertResourcesPaginated(
+            $response,
+            $this->makePaginator([$matchingPost], 'posts/search')
+        );
+    }
+
+    /** @test */
+    public function getting_a_list_of_resources_filtered_by_identically_named_relation_fields(): void
+    {
+        $user = factory(User::class)->create(['name' => 'John Doe']);
+        $matchingPost = factory(Post::class)
+            ->create([ 'user_id' => $user->id, ])->fresh();
+        factory(PostMeta::class)->create(['post_id' => $matchingPost->id, 'name' => 'test']);
+
+        factory(Post::class)->create(['publish_at' => Carbon::now()])->fresh();
+
+        Gate::policy(Post::class, GreenPolicy::class);
+
+        $response = $this->post(
+            '/api/posts/search',
+            [
+                'filters' => [
+                    ['field' => 'meta.name', 'operator' => '=', 'value' => 'test'],
+                    ['field' => 'user.name', 'operator' => '=', 'value' => 'John Doe'],
+                ],
+            ]
+        );
+
+        $this->assertResourcesPaginated(
+            $response,
+            $this->makePaginator([$matchingPost], 'posts/search')
+        );
+    }
+
+    /** @test */
+    public function getting_a_list_of_resources_filtered_by_identically_named_fields_on_different_nesting_level(): void
+    {
+        $matchingPost = factory(Post::class)
+            ->create(['title' => 'test' ])->fresh();
+        factory(PostMeta::class)->create(['post_id' => $matchingPost->id, 'title' => 'test']);
+
+
+        factory(Post::class)->create(['publish_at' => Carbon::now()])->fresh();
+
+        Gate::policy(Post::class, GreenPolicy::class);
+
+        $response = $this->post(
+            '/api/posts/search',
+            [
+                'filters' => [
+                    ['field' => 'meta.title', 'operator' => '=', 'value' => 'test'],
+                    ['field' => 'title', 'operator' => '=', 'value' => 'test'],
                 ],
             ]
         );

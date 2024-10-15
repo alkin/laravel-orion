@@ -46,16 +46,14 @@ trait HandlesRelationStandardBatchOperations
 
         $resourceModelClass = $this->resolveResourceModelClass();
 
-        $this->authorize('create', [$resourceModelClass, $parentEntity]);
+        $this->authorize($this->resolveAbility('create'), [$resourceModelClass, $parentEntity]);
 
         $beforeHookResult = $this->beforeBatchStore($request, $parentEntity);
         if ($this->hookResponds($beforeHookResult)) {
             return $beforeHookResult;
         }
 
-        $resources = config('orion.use_validated')
-            ? $request->validated('resources', [])
-            : $request->get('resources', []);
+        $resources = $this->retrieve($request, 'resources', []);
         $entities = collect([]);
 
         $requestedRelations = $this->relationsResolver->requestedRelations($request);
@@ -75,10 +73,16 @@ trait HandlesRelationStandardBatchOperations
                 Arr::get($resource, 'pivot', [])
             );
 
-            $entity = $this->newRelationQuery($parentEntity)->with($requestedRelations)->where(
-                $this->resolveQualifiedKeyName(),
+            $entityQuery = $this->buildStoreFetchQuery(
+                $request, $parentEntity, $requestedRelations
+            );
+            $entity = $this->runStoreFetchQuery(
+                $request,
+                $entityQuery,
+                $parentEntity,
                 $entity->{$this->keyName()}
-            )->first();
+            );
+
             $entity->wasRecentlyCreated = true;
 
             $entity = $this->cleanupEntity($entity);
@@ -196,11 +200,9 @@ trait HandlesRelationStandardBatchOperations
 
         foreach ($entities as $entity) {
             /** @var Model $entity */
-            $this->authorize('update', [$entity, $parentEntity]);
+            $this->authorize($this->resolveAbility('update'), [$entity, $parentEntity]);
 
-            $resource = config('orion.use_validated')
-                ? $request->validated("resources.{$entity->{$this->keyName()}}")
-                : $request->input("resources.{$entity->{$this->keyName()}}");
+            $resource = $this->retrieve($request, "resources.{$entity->{$this->keyName()}}");
 
             $this->beforeUpdate($request, $parentEntity, $entity);
             $this->beforeSave($request, $parentEntity, $entity);
@@ -213,10 +215,9 @@ trait HandlesRelationStandardBatchOperations
                 Arr::get($resource, 'pivot', [])
             );
 
-            $entity = $this->newRelationQuery($parentEntity)->with($requestedRelations)->where(
-                $this->resolveQualifiedKeyName(),
-                $entity->{$this->keyName()}
-            )->first();
+            $entity = $this->refreshUpdatedEntity(
+                $request, $parentEntity,$requestedRelations, $entity->{$this->keyName()}
+            );
 
             $entity = $this->cleanupEntity($entity);
 
@@ -397,17 +398,20 @@ trait HandlesRelationStandardBatchOperations
 
         foreach ($entities as $entity) {
             /** @var Model $entity */
-            $this->authorize($forceDeletes ? 'forceDelete' : 'delete', [$entity, $parentEntity]);
+            $this->authorize($this->resolveAbility($forceDeletes ? 'forceDelete' : 'delete'), [$entity, $parentEntity]);
 
             $this->beforeDestroy($request, $parentEntity, $entity);
 
             if (!$forceDeletes) {
                 $this->performDestroy($entity);
+
                 if ($softDeletes) {
-                    $entity = $this->newRelationQuery($parentEntity)->withTrashed()->with($requestedRelations)->where(
-                        $this->resolveQualifiedKeyName(),
-                        $entity->{$this->keyName()}
-                    )->firstOrFail();
+                    $entityQuery = $this->buildDestroyFetchQuery(
+                        $request, $parentEntity, $requestedRelations, $softDeletes
+                    );
+                    $entity = $this->runDestroyFetchQuery(
+                        $request, $entityQuery, $parentEntity, $entity->{$this->keyName()}
+                    );
                 }
             } else {
                 $this->performForceDestroy($entity);
@@ -564,16 +568,18 @@ trait HandlesRelationStandardBatchOperations
 
         foreach ($entities as $entity) {
             /** @var Model $entity */
-            $this->authorize('restore', [$entity, $parentEntity]);
+            $this->authorize($this->resolveAbility('restore'), [$entity, $parentEntity]);
 
             $this->beforeRestore($request, $parentEntity, $entity);
 
             $this->performRestore($entity);
 
-            $entity = $this->newRelationQuery($parentEntity)->with($requestedRelations)->where(
-                $this->resolveQualifiedKeyName(),
-                $entity->{$this->keyName()}
-            )->firstOrFail();
+            $entityQuery = $this->buildRestoreFetchQuery(
+                $request, $parentEntity, $requestedRelations
+            );
+            $entity = $this->runRestoreFetchQuery(
+                $request, $entityQuery, $parentEntity, $entity->{$this->keyName()}
+            );
 
             $entity = $this->cleanupEntity($entity);
 

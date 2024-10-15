@@ -20,7 +20,7 @@ use Orion\Tests\Unit\TestCase;
 class RelationControllerTest extends TestCase
 {
     /** @test */
-    public function binding_exception_is_thrown_if_model_is_not_set()
+    public function binding_exception_is_thrown_if_model_is_not_set(): void
     {
         $this->expectException(BindingException::class);
         $this->expectExceptionMessage('Relation is not defined for '.RelationControllerStubWithoutRelation::class);
@@ -29,12 +29,13 @@ class RelationControllerTest extends TestCase
     }
 
     /** @test */
-    public function dependencies_are_resolved_correctly()
+    public function dependencies_are_resolved_correctly(): void
     {
-        $fakeComponentsResolver = new ComponentsResolver(Post::class);
+        $fakeComponentsResolver = new ComponentsResolver(User::class);
+        $fakeParentComponentsResolver = new ComponentsResolver(Post::class);
         $fakeParamsValidator = new ParamsValidator();
         $fakeRelationsResolver = new RelationsResolver([], []);
-        $fakePaginator = new Paginator(15);
+        $fakePaginator = new Paginator(15, null);
         $fakeSearchBuilder = new SearchBuilder([]);
         $fakeQueryBuilder = new QueryBuilder(Post::class, $fakeParamsValidator, $fakeRelationsResolver, $fakeSearchBuilder);
         $fakeRelationQueryBuilder = new QueryBuilder(User::class, $fakeParamsValidator, $fakeRelationsResolver, $fakeSearchBuilder);
@@ -47,11 +48,20 @@ class RelationControllerTest extends TestCase
         )->once()->andReturn($fakeComponentsResolver);
 
         App::shouldReceive('makeWith')->with(
+            \Orion\Contracts\ComponentsResolver::class,
+            [
+                'resourceModelClass' => Post::class,
+            ]
+        )->once()->andReturn($fakeParentComponentsResolver);
+
+        App::shouldReceive('makeWith')->with(
             \Orion\Contracts\ParamsValidator::class,
             [
                 'exposedScopes' => ['testScope'],
                 'filterableBy' => ['test_filterable_field'],
                 'sortableBy' => ['test_sortable_field'],
+                'aggregatableBy' => ['test_aggregatable_field'],
+                'includableBy' => ['testRelation', 'testAlwaysIncludedRelation'],
             ]
         )->once()->andReturn($fakeParamsValidator);
 
@@ -67,6 +77,7 @@ class RelationControllerTest extends TestCase
             \Orion\Contracts\Paginator::class,
             [
                 'defaultLimit' => 15,
+                'maxLimit' => null,
             ]
         )->once()->andReturn($fakePaginator);
 
@@ -100,6 +111,7 @@ class RelationControllerTest extends TestCase
 
         $stub = new RelationControllerStub();
         $this->assertEquals($fakeComponentsResolver, $stub->getComponentsResolver());
+        $this->assertEquals($fakeParentComponentsResolver, $stub->getParentComponentsResolver());
         $this->assertEquals($fakeParamsValidator, $stub->getParamsValidator());
         $this->assertEquals($fakeRelationsResolver, $stub->getRelationsResolver());
         $this->assertEquals($fakePaginator, $stub->getPaginator());
@@ -109,7 +121,7 @@ class RelationControllerTest extends TestCase
     }
 
     /** @test */
-    public function creating_new_relation_query()
+    public function creating_new_relation_query(): void
     {
         $parentEntity = new Post();
         $stub = new RelationControllerStub();

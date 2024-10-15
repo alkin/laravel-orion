@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Orion\Tests\Fixtures\App\Traits\AppliesDefaultOrder;
 
@@ -19,7 +20,7 @@ class Post extends Model
      *
      * @var array
      */
-    protected $fillable = ['title', 'body', 'user_id'];
+    protected $fillable = ['title', 'body', 'user_id', 'stars'];
 
     /**
      * The attributes that should be cast to native types.
@@ -29,6 +30,8 @@ class Post extends Model
     protected $casts = [
         'meta' => 'array',
         'options' => 'array',
+        'stars' => 'float',
+        'publish_at' => 'datetime',
     ];
 
     /**
@@ -38,7 +41,8 @@ class Post extends Model
      */
     protected $dates = [
         'publish_at',
-        'deleted_at' //workaround for Laravel 5.7 - SoftDeletes trait adds deleted_at column to dates automatically since Laravel 5.8
+        'deleted_at',
+        //workaround for Laravel 5.7 - SoftDeletes trait adds deleted_at column to dates automatically since Laravel 5.8
     ];
 
     /**
@@ -74,6 +78,14 @@ class Post extends Model
     }
 
     /**
+     * @return MorphMany
+     */
+    public function comments()
+    {
+        return $this->morphMany(Comment::class, 'commentable');
+    }
+
+    /**
      * @param Builder $query
      * @return Builder|\Illuminate\Database\Query\Builder
      */
@@ -82,9 +94,26 @@ class Post extends Model
         return $query->where('publish_at', '<', Carbon::now());
     }
 
+    /**
+     * @param Builder $query
+     * @param string $dateTime
+     * @return Builder|\Illuminate\Database\Query\Builder
+     */
     public function scopePublishedAt(Builder $query, string $dateTime)
     {
         return $query->where('publish_at', $dateTime);
+    }
+
+    /**
+     * @param Builder $query
+     * @param string $direction
+     * @return Builder|\Illuminate\Database\Query\Builder
+     */
+    public function scopeOrderComments(Builder $query, string $direction = 'asc')
+    {
+        return $query->with(['comments' => function (MorphMany $query) use ($direction) {
+            $query->orderBy('created_at', $direction);
+        }]);
     }
 
     /**

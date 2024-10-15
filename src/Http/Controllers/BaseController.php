@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Orion\Concerns\BuildsResponses;
@@ -60,6 +61,11 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     protected $collectionResource = null;
 
     /**
+     * @var string|null $policy
+     */
+    protected $policy;
+
+    /**
      * @var ComponentsResolver $componentsResolver
      */
     protected $componentsResolver;
@@ -97,7 +103,7 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     public function __construct()
     {
         if (!$this->model) {
-            throw new BindingException('Model is not defined for ' . static::class);
+            throw new BindingException('Model is not defined for '.static::class);
         }
 
         $this->componentsResolver = App::makeWith(
@@ -112,6 +118,8 @@ abstract class BaseController extends \Illuminate\Routing\Controller
                 'exposedScopes' => $this->exposedScopes(),
                 'filterableBy' => $this->filterableBy(),
                 'sortableBy' => $this->sortableBy(),
+                'aggregatableBy' => $this->aggregates(),
+                'includableBy' => array_merge($this->includes(), $this->alwaysIncludes()),
             ]
         );
         $this->relationsResolver = App::makeWith(
@@ -125,6 +133,7 @@ abstract class BaseController extends \Illuminate\Routing\Controller
             Paginator::class,
             [
                 'defaultLimit' => $this->limit(),
+                'maxLimit' => $this->maxLimit(),
             ]
         );
         $this->searchBuilder = App::makeWith(
@@ -183,6 +192,16 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     }
 
     /**
+     * The relations that are allowed to be aggregated with a resource.
+     *
+     * @return array
+     */
+    public function aggregates(): array
+    {
+        return [];
+    }
+
+    /**
      * The attributes from filterableBy method that have "scoped"
      * filter options included in the response.
      *
@@ -231,6 +250,16 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     public function limit(): int
     {
         return 15;
+    }
+
+    /**
+     * Max pagination limit.
+     *
+     * @return int?
+     */
+    public function maxLimit(): ?int
+    {
+        return null;
     }
 
     /**
@@ -286,6 +315,10 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     protected function bindComponents(): void
     {
         $this->componentsResolver->bindRequestClass($this->getRequest());
+
+        if ($policy = $this->getPolicy()) {
+            $this->componentsResolver->bindPolicyClass($policy);
+        }
     }
 
     /**
@@ -303,6 +336,25 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     public function setRequest(string $requestClass): self
     {
         $this->request = $requestClass;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getPolicy(): ?string
+    {
+        return $this->policy;
+    }
+
+    /**
+     * @param string $policy
+     * @return $this
+     */
+    public function setPolicy(string $policy): self
+    {
+        $this->policy = $policy;
 
         return $this;
     }
@@ -513,8 +565,15 @@ abstract class BaseController extends \Illuminate\Routing\Controller
             'store' => 'create',
             'edit' => 'update',
             'update' => 'update',
-            'destroy' => 'delete',
+            'forceDelete' => 'forceDelete',
+            'delete' => 'delete',
+            'restore' => 'restore',
         ];
+    }
+
+    protected function resolveAbility(string $method): string
+    {
+        return $this->resourceAbilityMap()[$method] ?? $method;
     }
 
     /**
@@ -548,6 +607,7 @@ abstract class BaseController extends \Illuminate\Routing\Controller
     protected function keyName(): string
     {
         $resourceModelClass = $this->resolveResourceModelClass();
+
         return (new $resourceModelClass)->getKeyName();
     }
 
@@ -561,10 +621,35 @@ abstract class BaseController extends \Illuminate\Routing\Controller
      */
     protected function shouldPaginate(Request $request, int $paginationLimit): bool
     {
+        if (property_exists($this, 'paginationDisabled')) {
+            return ! $this->paginationDisabled;
+        }
+
         if (app()->bound('orion.paginationEnabled')) {
             return app()->make('orion.paginationEnabled');
         }
 
-        return !property_exists($this, 'paginationDisabled');
+        return true;
+    }
+
+    /**
+     * Retrieves data from the request
+     *
+     * @param Request $request
+     * @param string|null $key
+     * @param null $default
+     * @return mixed
+     */
+    protected function retrieve(Request $request, ?string $key = null, $default = null)
+    {
+        if (!config('orion.use_validated')) {
+            return $key ? $request->input($key, $default) : $request->all();
+        }
+
+        if (!$key) {
+            return $request->validated();
+        }
+
+        return Arr::get($request->safe([$key]), $key, $default);
     }
 }

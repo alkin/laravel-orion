@@ -5,8 +5,10 @@ namespace Orion\Drivers\Standard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -41,10 +43,17 @@ class RelationsResolver implements \Orion\Contracts\RelationsResolver
      */
     public function requestedRelations(Request $request): array
     {
-        $requestedIncludesStr = $request->get('include', '');
-        $requestedIncludes = explode(',', $requestedIncludesStr);
+        $requestedIncludesQuery = collect(explode(',', $request->query('include', '')));
+        $requestedIncludesBody = collect($request->get('includes', []))->pluck('relation');
 
-        $allowedIncludes = array_unique(array_merge($this->includableRelations, $this->alwaysIncludedRelations));
+        $requestedIncludes = $requestedIncludesQuery
+            ->merge($requestedIncludesBody)
+            ->merge($this->alwaysIncludedRelations)
+            ->unique()->filter()->all();
+
+        $allowedIncludes = array_unique(
+            array_merge($this->includableRelations, $this->alwaysIncludedRelations)
+        );
 
         $validatedIncludes = [];
 
@@ -64,10 +73,43 @@ class RelationsResolver implements \Orion\Contracts\RelationsResolver
                         $validatedIncludes[] = $requestedInclude;
                     }
                 }
+            } elseif (in_array('*', $allowedIncludes, true)) {
+                $validatedIncludes[] = $requestedInclude;
             }
         }
 
-        return array_unique(array_merge($validatedIncludes, $this->alwaysIncludedRelations));
+        return $validatedIncludes;
+    }
+
+    public function relationInstanceFromParamConstraint(string $resourceModelClass, string $paramConstraint): Relation
+    {
+        $resourceModel = new $resourceModelClass();
+
+        do {
+            $relationName = $this->rootRelationFromParamConstraint($paramConstraint);
+            $paramConstraint = str_replace("{$relationName}.", '', $paramConstraint);
+
+            $relation = $resourceModel->{$relationName}();
+
+            if (in_array(get_class($relation), [MorphTo::class, MorphMany::class, MorphToMany::class, MorphOne::class])) {
+                break;
+            }
+
+            $resourceModel = $relation->getModel();
+        } while (str_contains($paramConstraint, '.'));
+
+        return $relation;
+    }
+
+    /**
+     * Resolves relation name from the given param constraint.
+     *
+     * @param string $paramConstraint
+     * @return string
+     */
+    public function rootRelationFromParamConstraint(string $paramConstraint): string
+    {
+        return Arr::first(explode('.', $paramConstraint));
     }
 
     /**
@@ -113,12 +155,30 @@ class RelationsResolver implements \Orion\Contracts\RelationsResolver
      */
     public function relationForeignKeyFromRelationInstance(Relation $relationInstance): string
     {
-        $laravelVersion = (float)app()->version();
+        $laravelVersion = (float) app()->version();
 
         return $laravelVersion > 5.7 || get_class(
             $relationInstance
         ) === HasOne::class ? $relationInstance->getQualifiedForeignKeyName(
         ) : $relationInstance->getQualifiedForeignKey();
+    }
+
+    /**
+     * Retrieve a fully-qualified field name of the given relation.
+     *
+     * @param Relation $relation
+     * @param string $field
+     * @return string
+     */
+    public function getQualifiedRelationFieldName(Relation $relation, string $field): string
+    {
+        if (in_array(get_class($relation), [MorphTo::class, MorphMany::class, MorphToMany::class, MorphOne::class])) {
+            return $field;
+        }
+
+        $table = $relation->getModel()->getTable();
+
+        return "{$table}.{$field}";
     }
 
     /**
@@ -132,7 +192,7 @@ class RelationsResolver implements \Orion\Contracts\RelationsResolver
         switch (get_class($relationInstance)) {
             case HasOne::class:
             case MorphOne::class:
-                return $relationInstance->getParent()->getTable() . '.' . $relationInstance->getLocalKeyName();
+                return $relationInstance->getParent()->getTable().'.'.$relationInstance->getLocalKeyName();
             case BelongsTo::class:
             case MorphTo::class:
                 return $relationInstance->getQualifiedOwnerKeyName();

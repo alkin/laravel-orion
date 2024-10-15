@@ -52,12 +52,13 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
             ->filter(function (Column $column) use ($includedColumns) {
                 return in_array($column->getName(), $includedColumns, true);
             })
-            ->map(function (Column $column) use ($resourceModel) {
-                $propertyClass = $this->schemaManager->resolveSchemaPropertyClass($column, $resourceModel);
+            ->map(
+                function (Column $column) use ($resourceModel) {
+                    $propertyClass = $this->schemaManager->resolveSchemaPropertyClass($column, $resourceModel);
 
-                return $this->propertyBuilder->build($column, $propertyClass);
-            })
-            ->values()
+                    return $this->propertyBuilder->build($column, $propertyClass);
+                }
+            )->values()
             ->keyBy('name')
             ->toArray();
     }
@@ -90,7 +91,7 @@ class BaseModelComponentBuilder extends ModelComponentBuilder
     {
         return collect($resourceRequest->commonRules())
             ->keys()
-            ->map(fn ($i) => explode('.', (string) $i)[0])
+            ->map(fn($i) => explode('.', (string) $i)[0])
             ->unique()
             ->all();
     }

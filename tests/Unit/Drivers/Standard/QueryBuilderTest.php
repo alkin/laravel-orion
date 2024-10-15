@@ -2,6 +2,7 @@
 
 namespace Orion\Tests\Unit\Drivers\Standard;
 
+use Carbon\Carbon;
 use Illuminate\Routing\Route;
 use Mockery;
 use Orion\Drivers\Standard\ParamsValidator;
@@ -9,6 +10,7 @@ use Orion\Drivers\Standard\QueryBuilder;
 use Orion\Drivers\Standard\RelationsResolver;
 use Orion\Drivers\Standard\SearchBuilder;
 use Orion\Http\Requests\Request;
+use Orion\Tests\Fixtures\App\Models\Comment;
 use Orion\Tests\Fixtures\App\Models\Post;
 use Orion\Tests\Fixtures\App\Models\Team;
 use Orion\Tests\Fixtures\App\Models\User;
@@ -18,7 +20,7 @@ use Orion\Tests\Unit\TestCase;
 class QueryBuilderTest extends TestCase
 {
     /** @test */
-    public function building_query_for_index_endpoint()
+    public function building_query_for_index_endpoint(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -35,13 +37,15 @@ class QueryBuilderTest extends TestCase
         $queryBuilderMock->shouldReceive('applySearchingToQuery')->with($query, $request)->never();
         $queryBuilderMock->shouldReceive('applySortingToQuery')->with($query, $request)->never();
 
+        $queryBuilderMock->shouldReceive('applyIncludesToQuery')->with($query, $request)->once();
+        $queryBuilderMock->shouldReceive('applyAggregatesToQuery')->with($query, $request)->once();
         $queryBuilderMock->shouldReceive('applySoftDeletesToQuery')->with($query, $request)->once();
 
         $this->assertSame($query, $queryBuilderMock->buildQuery($query, $request));
     }
 
     /** @test */
-    public function building_query_for_search_endpoint()
+    public function building_query_for_search_endpoint(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -58,12 +62,14 @@ class QueryBuilderTest extends TestCase
         $queryBuilderMock->shouldReceive('applySearchingToQuery')->with($query, $request)->once();
         $queryBuilderMock->shouldReceive('applySortingToQuery')->with($query, $request)->once();
         $queryBuilderMock->shouldReceive('applySoftDeletesToQuery')->with($query, $request)->once();
+        $queryBuilderMock->shouldReceive('applyIncludesToQuery')->with($query, $request)->once();
+        $queryBuilderMock->shouldReceive('applyAggregatesToQuery')->with($query, $request)->once();
 
         $this->assertSame($query, $queryBuilderMock->buildQuery($query, $request));
     }
 
     /** @test */
-    public function building_query_for_show_endpoint()
+    public function building_query_for_show_endpoint(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -80,12 +86,14 @@ class QueryBuilderTest extends TestCase
         $queryBuilderMock->shouldReceive('applySearchingToQuery')->with($query, $request)->never();
         $queryBuilderMock->shouldReceive('applySortingToQuery')->with($query, $request)->never();
         $queryBuilderMock->shouldReceive('applySoftDeletesToQuery')->with($query, $request)->once();
+        $queryBuilderMock->shouldReceive('applyIncludesToQuery')->with($query, $request)->once();
+        $queryBuilderMock->shouldReceive('applyAggregatesToQuery')->with($query, $request)->once();
 
         $this->assertSame($query, $queryBuilderMock->buildQuery($query, $request));
     }
 
     /** @test */
-    public function applying_scopes_to_query()
+    public function applying_scopes_to_query(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -122,7 +130,52 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function applying_model_level_fields_filters_with_singular_values()
+    public function include_relations_do_not_overwrite_scopes_with_same_relations(): void
+    {
+        $request = new Request(['include' => 'comments']);
+        $request->setRouteResolver(
+            function () {
+                return new Route('POST', '/api/posts/search', [ControllerStub::class, 'search']);
+            }
+        );
+        $request->query->set(
+            'scopes',
+            [
+                ['name' => 'orderComments', 'parameters' => ['asc']],
+            ]
+        );
+
+        $post = factory(Post::class)->create();
+
+        $commentA = factory(Comment::class)->make(['created_at' => Carbon::parse('2019-01-01 09:35:14')]);
+        $commentA->commentable()->associate($post);
+        $commentA->save();
+
+        $commentB = factory(Comment::class)->make(['created_at' => Carbon::parse('2018-01-01 09:35:14')]);
+        $commentB->commentable()->associate($post);
+        $commentB->save();
+
+        $query = Post::query();
+
+        $queryBuilder = new QueryBuilder(
+            Post::class,
+            new ParamsValidator(['orderComments'], [], [], [], ['comments']),
+            new RelationsResolver(['comments'], []),
+            new SearchBuilder([])
+        );
+        $queryBuilder->buildQuery($query, $request);
+
+        $posts = $query->get();
+
+        $dates = $posts->first()->comments->map(function(Comment $comment) {
+            return $comment->created_at;
+        });
+
+        $this->assertTrue(Carbon::parse($dates->first())->isBefore(Carbon::parse($dates->last())));
+    }
+
+    /** @test */
+    public function applying_model_level_fields_filters_with_singular_values(): void
     {
         $request = $this->makeRequestWithFilters(
             [
@@ -153,7 +206,7 @@ class QueryBuilderTest extends TestCase
         $this->assertFalse($posts->contains('id', $postC->id));
     }
 
-    protected function makeRequestWithFilters(array $filters)
+    protected function makeRequestWithFilters(array $filters): Request
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -167,7 +220,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function applying_model_level_fields_filters_with_multiple_values()
+    public function applying_model_level_fields_filters_with_multiple_values(): void
     {
         $request = $this->makeRequestWithFilters(
             [
@@ -199,7 +252,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function applying_relation_level_fields_filters_with_singular_values()
+    public function applying_relation_level_fields_filters_with_singular_values(): void
     {
         $request = $this->makeRequestWithFilters(
             [
@@ -236,7 +289,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function applying_relation_level_fields_filters_with_multiple_values()
+    public function applying_relation_level_fields_filters_with_multiple_values(): void
     {
         $request = $this->makeRequestWithFilters(
             [
@@ -273,7 +326,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function applying_filters_with_not_in_operator()
+    public function applying_filters_with_not_in_operator(): void
     {
         $request = $this->makeRequestWithFilters(
             [
@@ -304,7 +357,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function searching_on_model_fields()
+    public function searching_on_model_fields(): void
     {
         $request = $this->makeRequestWithSearch(
             [
@@ -338,7 +391,7 @@ class QueryBuilderTest extends TestCase
         $this->assertFalse($posts->contains('id', $postE->id));
     }
 
-    protected function makeRequestWithSearch(array $search)
+    protected function makeRequestWithSearch(array $search): Request
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -352,7 +405,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function searching_on_relation_fields()
+    public function searching_on_relation_fields(): void
     {
         $request = $this->makeRequestWithSearch(
             [
@@ -396,7 +449,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function search_query_constraints_are_not_applied_if_descriptor_is_missing_in_request()
+    public function search_query_constraints_are_not_applied_if_descriptor_is_missing_in_request(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -425,7 +478,7 @@ class QueryBuilderTest extends TestCase
     //TODO: test sorting on different relation types
 
     /** @test */
-    public function default_sorting_based_on_model_fields()
+    public function default_sorting_based_on_model_fields(): void
     {
         $request = $this->makeRequestWithSort(
             [
@@ -454,7 +507,7 @@ class QueryBuilderTest extends TestCase
         $this->assertEquals($postC->id, $posts[2]->id);
     }
 
-    protected function makeRequestWithSort(array $sort)
+    protected function makeRequestWithSort(array $sort): Request
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -468,7 +521,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function desc_sorting_based_on_model_fields()
+    public function desc_sorting_based_on_model_fields(): void
     {
         $request = $this->makeRequestWithSort(
             [
@@ -498,7 +551,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function default_sorting_based_on_relation_fields()
+    public function default_sorting_based_on_relation_fields(): void
     {
         $request = $this->makeRequestWithSort(
             [
@@ -533,7 +586,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function desc_sorting_based_on_relation_fields()
+    public function desc_sorting_based_on_relation_fields(): void
     {
         $request = $this->makeRequestWithSort(
             [
@@ -568,7 +621,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function soft_deletes_query_constraints_are_not_applied_if_model_is_not_soft_deletable()
+    public function soft_deletes_query_constraints_are_not_applied_if_model_is_not_soft_deletable(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -592,7 +645,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function trashed_models_are_returned_when_requested()
+    public function trashed_models_are_returned_when_requested(): void
     {
         $request = new Request();
         $request->setRouteResolver(
@@ -623,7 +676,7 @@ class QueryBuilderTest extends TestCase
     }
 
     /** @test */
-    public function only_trashed_models_are_returned_when_requested()
+    public function only_trashed_models_are_returned_when_requested(): void
     {
         $request = new Request();
         $request->setRouteResolver(

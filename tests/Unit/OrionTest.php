@@ -9,7 +9,7 @@ use Orion\Tests\Fixtures\App\Http\Controllers\DummyController;
 class OrionTest extends TestCase
 {
     /** @test */
-    public function registering_resource()
+    public function registering_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -41,7 +41,7 @@ class OrionTest extends TestCase
      * @param string $uri
      * @param string $controller
      */
-    protected function assertRouteRegistered(string $name, array $methods, string $uri, string $controller)
+    protected function assertRouteRegistered(string $name, array $methods, string $uri, string $controller): void
     {
         $routes = Route::getRoutes();
         /**
@@ -62,13 +62,13 @@ class OrionTest extends TestCase
      *
      * @param string $name
      */
-    protected function assertRouteNotRegistered(string $name)
+    protected function assertRouteNotRegistered(string $name): void
     {
         $this->assertNull(Route::getRoutes()->getByName($name));
     }
 
     /** @test */
-    public function registering_resource_with_soft_deletes()
+    public function registering_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -92,7 +92,35 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_one_resource()
+    public function registering_relation_resource_with_the_same_name_as_parent(): void
+    {
+        Route::group(
+            ['as' => 'api.', 'prefix' => 'api'],
+            function () {
+                Orion::hasManyResource('projects', 'projects', DummyController::class);
+            }
+        );
+
+        $this->assertRouteRegistered('api.projects.projects.index', ['GET', 'HEAD'], 'api/projects/{project}/projects', DummyController::class.'@index');
+        $this->assertRouteRegistered('api.projects.projects.search', ['POST'], 'api/projects/{project}/projects/search', DummyController::class.'@search');
+        $this->assertRouteRegistered('api.projects.projects.store', ['POST'], 'api/projects/{project}/projects', DummyController::class.'@store');
+        $this->assertRouteRegistered('api.projects.projects.show', ['GET', 'HEAD'], 'api/projects/{project}/projects/{project?}', DummyController::class.'@show');
+        $this->assertRouteRegistered('api.projects.projects.update', ['PUT', 'PATCH'], 'api/projects/{project}/projects/{project?}', DummyController::class.'@update');
+        $this->assertRouteRegistered('api.projects.projects.destroy', ['DELETE'], 'api/projects/{project}/projects/{project?}', DummyController::class.'@destroy');
+
+        $this->assertRouteRegistered('api.projects.projects.associate', ['POST'], 'api/projects/{project}/projects/associate', DummyController::class.'@associate');
+        $this->assertRouteRegistered('api.projects.projects.dissociate', ['DELETE'], 'api/projects/{project}/projects/{project?}/dissociate', DummyController::class.'@dissociate');
+
+        $this->assertRouteRegistered('api.projects.projects.batchStore', ['POST'], 'api/projects/{project}/projects/batch', DummyController::class.'@batchStore');
+        $this->assertRouteRegistered('api.projects.projects.batchUpdate', ['PATCH'], 'api/projects/{project}/projects/batch', DummyController::class.'@batchUpdate');
+        $this->assertRouteRegistered('api.projects.projects.batchDestroy', ['DELETE'], 'api/projects/{project}/projects/batch', DummyController::class.'@batchDestroy');
+
+        $this->assertRouteNotRegistered('api.projects.projects.restore');
+        $this->assertRouteNotRegistered('api.projects.projects.batchRestore');
+    }
+
+    /** @test */
+    public function registering_has_one_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -106,10 +134,6 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.meta.update', ['PUT', 'PATCH'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@update');
         $this->assertRouteRegistered('api.projects.meta.destroy', ['DELETE'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@destroy');
 
-        $this->assertRouteRegistered('api.projects.meta.batchStore', ['POST'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchStore');
-        $this->assertRouteRegistered('api.projects.meta.batchUpdate', ['PATCH'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchUpdate');
-        $this->assertRouteRegistered('api.projects.meta.batchDestroy', ['DELETE'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchDestroy');
-
         $this->assertRouteNotRegistered('api.projects.meta.index');
         $this->assertRouteNotRegistered('api.projects.meta.search');
         $this->assertRouteNotRegistered('api.projects.meta.restore');
@@ -117,7 +141,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_one_resource_with_soft_deletes()
+    public function registering_has_one_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -132,17 +156,12 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.meta.destroy', ['DELETE'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@destroy');
         $this->assertRouteRegistered('api.projects.meta.restore', ['POST'], 'api/projects/{project}/meta/{metum?}/restore', DummyController::class.'@restore');
 
-        $this->assertRouteRegistered('api.projects.meta.batchStore', ['POST'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchStore');
-        $this->assertRouteRegistered('api.projects.meta.batchUpdate', ['PATCH'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchUpdate');
-        $this->assertRouteRegistered('api.projects.meta.batchDestroy', ['DELETE'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchDestroy');
-        $this->assertRouteRegistered('api.projects.meta.batchRestore', ['POST'], 'api/projects/{project}/meta/batch/restore', DummyController::class.'@batchRestore');
-
         $this->assertRouteNotRegistered('api.projects.meta.index');
         $this->assertRouteNotRegistered('api.projects.meta.search');
     }
 
     /** @test */
-    public function registering_belongs_to_resource()
+    public function registering_belongs_to_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -167,7 +186,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_belongs_to_resource_with_soft_deletes()
+    public function registering_belongs_to_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -192,7 +211,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_many_resource()
+    public function registering_has_many_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -220,7 +239,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_many_resource_with_soft_deletes()
+    public function registering_has_many_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -247,7 +266,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_belongs_to_many_resource()
+    public function registering_belongs_to_many_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -278,7 +297,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_belongs_to_many_resource_with_soft_deletes()
+    public function registering_belongs_to_many_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -308,7 +327,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_one_through_resource()
+    public function registering_has_one_through_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -322,10 +341,6 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.meta.update', ['PUT', 'PATCH'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@update');
         $this->assertRouteRegistered('api.projects.meta.destroy', ['DELETE'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@destroy');
 
-        $this->assertRouteRegistered('api.projects.meta.batchStore', ['POST'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchStore');
-        $this->assertRouteRegistered('api.projects.meta.batchUpdate', ['PATCH'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchUpdate');
-        $this->assertRouteRegistered('api.projects.meta.batchDestroy', ['DELETE'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchDestroy');
-
         $this->assertRouteNotRegistered('api.projects.meta.index');
         $this->assertRouteNotRegistered('api.projects.meta.search');
         $this->assertRouteNotRegistered('api.projects.meta.restore');
@@ -333,7 +348,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_one_through_resource_with_soft_deletes()
+    public function registering_has_one_through_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -348,17 +363,12 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.meta.destroy', ['DELETE'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@destroy');
         $this->assertRouteRegistered('api.projects.meta.restore', ['POST'], 'api/projects/{project}/meta/{metum?}/restore', DummyController::class.'@restore');
 
-        $this->assertRouteRegistered('api.projects.meta.batchStore', ['POST'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchStore');
-        $this->assertRouteRegistered('api.projects.meta.batchUpdate', ['PATCH'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchUpdate');
-        $this->assertRouteRegistered('api.projects.meta.batchDestroy', ['DELETE'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchDestroy');
-        $this->assertRouteRegistered('api.projects.meta.batchRestore', ['POST'], 'api/projects/{project}/meta/batch/restore', DummyController::class.'@batchRestore');
-
         $this->assertRouteNotRegistered('api.projects.meta.index');
         $this->assertRouteNotRegistered('api.projects.meta.search');
     }
 
     /** @test */
-    public function registering_has_many_through_resource()
+    public function registering_has_many_through_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -386,7 +396,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_has_many_through_resource_with_soft_deletes()
+    public function registering_has_many_through_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -413,7 +423,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_one_resource()
+    public function registering_morph_one_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -427,10 +437,6 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.meta.update', ['PUT', 'PATCH'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@update');
         $this->assertRouteRegistered('api.projects.meta.destroy', ['DELETE'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@destroy');
 
-        $this->assertRouteRegistered('api.projects.meta.batchStore', ['POST'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchStore');
-        $this->assertRouteRegistered('api.projects.meta.batchUpdate', ['PATCH'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchUpdate');
-        $this->assertRouteRegistered('api.projects.meta.batchDestroy', ['DELETE'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchDestroy');
-
         $this->assertRouteNotRegistered('api.projects.meta.index');
         $this->assertRouteNotRegistered('api.projects.meta.search');
         $this->assertRouteNotRegistered('api.projects.meta.restore');
@@ -438,7 +444,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_one_resource_with_soft_deletes()
+    public function registering_morph_one_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -453,17 +459,12 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.meta.destroy', ['DELETE'], 'api/projects/{project}/meta/{metum?}', DummyController::class.'@destroy');
         $this->assertRouteRegistered('api.projects.meta.restore', ['POST'], 'api/projects/{project}/meta/{metum?}/restore', DummyController::class.'@restore');
 
-        $this->assertRouteRegistered('api.projects.meta.batchStore', ['POST'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchStore');
-        $this->assertRouteRegistered('api.projects.meta.batchUpdate', ['PATCH'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchUpdate');
-        $this->assertRouteRegistered('api.projects.meta.batchDestroy', ['DELETE'], 'api/projects/{project}/meta/batch', DummyController::class.'@batchDestroy');
-        $this->assertRouteRegistered('api.projects.meta.batchRestore', ['POST'], 'api/projects/{project}/meta/batch/restore', DummyController::class.'@batchRestore');
-
         $this->assertRouteNotRegistered('api.projects.meta.index');
         $this->assertRouteNotRegistered('api.projects.meta.search');
     }
 
     /** @test */
-    public function registering_morph_many_resource()
+    public function registering_morph_many_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -491,7 +492,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_many_resource_with_soft_deletes()
+    public function registering_morph_many_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -518,7 +519,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_to_resource()
+    public function registering_morph_to_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -543,7 +544,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_to_resource_with_soft_deletes()
+    public function registering_morph_to_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -568,7 +569,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_to_many_resource()
+    public function registering_morph_to_many_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -599,7 +600,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morph_to_many_resource_with_soft_deletes()
+    public function registering_morph_to_many_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -629,7 +630,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morphed_by_many_resource()
+    public function registering_morphed_by_many_resource(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -660,7 +661,7 @@ class OrionTest extends TestCase
     }
 
     /** @test */
-    public function registering_morphed_by_many_resource_with_soft_deletes()
+    public function registering_morphed_by_many_resource_with_soft_deletes(): void
     {
         Route::group(
             ['as' => 'api.', 'prefix' => 'api'],
@@ -687,5 +688,50 @@ class OrionTest extends TestCase
         $this->assertRouteRegistered('api.projects.users.batchUpdate', ['PATCH'], 'api/projects/{project}/users/batch', DummyController::class.'@batchUpdate');
         $this->assertRouteRegistered('api.projects.users.batchDestroy', ['DELETE'], 'api/projects/{project}/users/batch', DummyController::class.'@batchDestroy');
         $this->assertRouteRegistered('api.projects.users.batchRestore', ['POST'], 'api/projects/{project}/users/batch/restore', DummyController::class.'@batchRestore');
+    }
+
+    /** @test */
+    public function registering_resource_without_batch_removes_routes(): void
+    {
+        Route::group(
+            ['as' => 'api.', 'prefix' => 'api'],
+            function () {
+                Orion::resource('projects', DummyController::class)->withoutBatch();
+            }
+        );
+
+        $this->assertRouteRegistered('api.projects.search', ['POST'], 'api/projects/search', DummyController::class.'@search');
+        $this->assertRouteRegistered('api.projects.index', ['GET', 'HEAD'], 'api/projects', DummyController::class.'@index');
+        $this->assertRouteRegistered('api.projects.store', ['POST'], 'api/projects', DummyController::class.'@store');
+        $this->assertRouteRegistered('api.projects.show', ['GET', 'HEAD'], 'api/projects/{project}', DummyController::class.'@show');
+        $this->assertRouteRegistered('api.projects.update', ['PUT', 'PATCH'], 'api/projects/{project}', DummyController::class.'@update');
+        $this->assertRouteRegistered('api.projects.destroy', ['DELETE'], 'api/projects/{project}', DummyController::class.'@destroy');
+
+        $this->assertRouteNotRegistered('api.projects.batchStore');
+        $this->assertRouteNotRegistered('api.projects.batchUpdate');
+        $this->assertRouteNotRegistered('api.projects.batchDestroy');
+    }
+
+    /** @test */
+    public function registering_resource_without_search_removes_routes(): void
+    {
+        Route::group(
+            ['as' => 'api.', 'prefix' => 'api'],
+            function () {
+                Orion::resource('projects', DummyController::class)->withoutSearch();
+            }
+        );
+
+        $this->assertRouteNotRegistered('api.projects.search');
+
+        $this->assertRouteRegistered('api.projects.index', ['GET', 'HEAD'], 'api/projects', DummyController::class.'@index');
+        $this->assertRouteRegistered('api.projects.store', ['POST'], 'api/projects', DummyController::class.'@store');
+        $this->assertRouteRegistered('api.projects.show', ['GET', 'HEAD'], 'api/projects/{project}', DummyController::class.'@show');
+        $this->assertRouteRegistered('api.projects.update', ['PUT', 'PATCH'], 'api/projects/{project}', DummyController::class.'@update');
+        $this->assertRouteRegistered('api.projects.destroy', ['DELETE'], 'api/projects/{project}', DummyController::class.'@destroy');
+
+        $this->assertRouteRegistered('api.projects.batchStore', ['POST'], 'api/projects/batch', DummyController::class.'@batchStore');
+        $this->assertRouteRegistered('api.projects.batchUpdate', ['PATCH'], 'api/projects/batch', DummyController::class.'@batchUpdate');
+        $this->assertRouteRegistered('api.projects.batchDestroy', ['DELETE'], 'api/projects/batch', DummyController::class.'@batchDestroy');
     }
 }
